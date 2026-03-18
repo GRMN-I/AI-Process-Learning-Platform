@@ -31,8 +31,23 @@ from app.services.embedding_service import get_embedding
 router = APIRouter(prefix="/procedures", tags=["procedures"])
 
 
+def _build_source_result(version: ProcedureVersion) -> dict | None:
+    if version.source_processing_status != "READY":
+        return None
+    if not version.source_structure or not version.transcript:
+        return None
+    if not version.transcript.transcript_raw:
+        return None
+
+    return {
+        "structure": version.source_structure.structure_json,
+        "transcript_raw": version.transcript.transcript_raw,
+    }
+
+
 def _to_version_out(version: ProcedureVersion) -> ProcedureVersionOut:
     payload = ProcedureVersionOut.model_validate(version).model_dump()
+    payload["source_result"] = _build_source_result(version)
     payload["derived_training"] = (
         {
             "id": str(version.training.id),

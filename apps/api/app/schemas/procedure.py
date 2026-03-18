@@ -2,6 +2,7 @@ import uuid
 from datetime import date, datetime
 
 from pydantic import BaseModel, Field
+from app.schemas.generated_content import GeneratedTrainingStructure
 
 
 class ProcedureCreate(BaseModel):
@@ -33,6 +34,11 @@ class TaskProcedureLinkCreate(BaseModel):
     is_primary: bool = False
 
 
+class ProcedureVersionSourceResultOut(BaseModel):
+    structure: GeneratedTrainingStructure
+    transcript_raw: str = Field(min_length=1)
+
+
 class ProcedureVersionOut(BaseModel):
     id: uuid.UUID
     procedure_id: uuid.UUID
@@ -50,6 +56,7 @@ class ProcedureVersionOut(BaseModel):
     source_processing_status: str
     source_processing_error: str | None = None
     source_processed_at: datetime | None = None
+    source_result: ProcedureVersionSourceResultOut | None = None
     derived_training: dict | None = None
     created_by: uuid.UUID
     created_at: datetime
