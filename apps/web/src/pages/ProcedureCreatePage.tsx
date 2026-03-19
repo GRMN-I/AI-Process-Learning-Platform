@@ -1,14 +1,9 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Loader2, Upload } from "lucide-react";
 
 import api from "@/services/api";
-
-interface RoleOption {
-  id: string;
-  name: string;
-}
 
 interface ProcedureCreateResponse {
   id: string;
@@ -55,16 +50,10 @@ export default function ProcedureCreatePage() {
   const [procedureForm, setProcedureForm] = useState({
     title: "",
     description: "",
-    owner_role_id: "",
   });
   const [sourceFile, setSourceFile] = useState<File | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
   const [isDragActive, setIsDragActive] = useState(false);
-
-  const { data: roles } = useQuery<RoleOption[]>({
-    queryKey: ["roles"],
-    queryFn: () => api.get("/roles").then((r) => r.data),
-  });
 
   function handleSelectedFile(file: File | null) {
     if (!file) {
@@ -114,7 +103,7 @@ export default function ProcedureCreatePage() {
       const payload = {
         title: procedureForm.title.trim(),
         description: procedureForm.description.trim() || null,
-        owner_role_id: procedureForm.owner_role_id || null,
+        owner_role_id: null,
         source_asset: sourceAsset ?? null,
       };
 
@@ -153,52 +142,30 @@ export default function ProcedureCreatePage() {
         className="space-y-6"
       >
         <section className="rounded-[28px] border border-gray-200 bg-white p-6 shadow-sm">
-          <div className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
-            <div className="space-y-4">
-              <h2 className="text-lg font-semibold text-gray-900">Datos del procedimiento</h2>
-              <label className="block">
-                <span className="mb-1.5 block text-sm font-medium text-gray-700">Nombre</span>
-                <input
-                  required
-                  value={procedureForm.title}
-                  onChange={(event) => setProcedureForm((current) => ({ ...current, title: event.target.value }))}
-                  className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm"
-                  placeholder="Recepción y validación de mercadería"
-                />
-              </label>
-              <label className="block">
-                <span className="mb-1.5 block text-sm font-medium text-gray-700">Descripción</span>
-                <textarea
-                  rows={4}
-                  value={procedureForm.description}
-                  onChange={(event) =>
-                    setProcedureForm((current) => ({ ...current, description: event.target.value }))
-                  }
-                  className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm"
-                  placeholder="Describe el objetivo operativo del procedimiento."
-                />
-              </label>
-            </div>
-
-            <div className="space-y-4">
-              <label className="block">
-                <span className="mb-1.5 block text-sm font-medium text-gray-700">Rol</span>
-                <select
-                  value={procedureForm.owner_role_id}
-                  onChange={(event) =>
-                    setProcedureForm((current) => ({ ...current, owner_role_id: event.target.value }))
-                  }
-                  className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm"
-                >
-                  <option value="">Sin asignar</option>
-                  {roles?.map((role) => (
-                    <option key={role.id} value={role.id}>
-                      {role.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
+          <div className="space-y-4">
+            <h2 className="text-lg font-semibold text-gray-900">Datos del procedimiento</h2>
+            <label className="block">
+              <span className="mb-1.5 block text-sm font-medium text-gray-700">Nombre</span>
+              <input
+                required
+                value={procedureForm.title}
+                onChange={(event) => setProcedureForm((current) => ({ ...current, title: event.target.value }))}
+                className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm"
+                placeholder="Recepción y validación de mercadería"
+              />
+            </label>
+            <label className="block">
+              <span className="mb-1.5 block text-sm font-medium text-gray-700">Descripción</span>
+              <textarea
+                rows={4}
+                value={procedureForm.description}
+                onChange={(event) =>
+                  setProcedureForm((current) => ({ ...current, description: event.target.value }))
+                }
+                className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm"
+                placeholder="Describe el objetivo operativo del procedimiento."
+              />
+            </label>
           </div>
         </section>
 
