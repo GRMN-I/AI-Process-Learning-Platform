@@ -112,7 +112,7 @@ export default function OperatorTrainingPage() {
   const structure = training.structure?.structure_json;
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6">
+    <div className="mx-auto max-w-6xl space-y-6 pt-8">
       <div className="space-y-3">
         <Link
           to="/trainings"

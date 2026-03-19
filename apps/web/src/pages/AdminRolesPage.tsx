@@ -102,7 +102,7 @@ export default function AdminRolesPage() {
         }
       `}</style>
 
-      <div className="mx-auto max-w-6xl space-y-6">
+      <div className="mx-auto max-w-5xl space-y-6 pt-8">
       <div className="flex items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Roles</h1>

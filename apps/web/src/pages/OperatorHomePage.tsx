@@ -40,7 +40,7 @@ export default function OperatorHomePage() {
   }
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6">
+    <div className="mx-auto max-w-6xl space-y-6 pt-8">
       <div className="rounded-3xl bg-gradient-to-br from-indigo-600 via-indigo-600 to-indigo-700 p-8 text-white shadow-lg">
         <p className="text-sm font-medium text-indigo-100">Home operativa</p>
         <h1 className="mt-2 text-3xl font-bold">Hola, {user?.name ?? "Operador"}</h1>

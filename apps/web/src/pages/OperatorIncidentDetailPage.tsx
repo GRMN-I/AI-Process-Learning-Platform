@@ -41,7 +41,7 @@ export default function OperatorIncidentDetailPage() {
   };
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6">
+    <div className="mx-auto max-w-6xl space-y-6 pt-8">
       <Link
         to="/incidents"
         className="inline-flex items-center gap-2 text-sm font-medium text-indigo-600 hover:text-indigo-700"

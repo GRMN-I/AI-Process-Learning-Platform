@@ -97,7 +97,7 @@ export default function RoleDetailPage() {
     procedures?.filter((procedure) => !role.procedures.some((linked) => linked.procedure_id === procedure.id)) ?? [];
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6">
+    <div className="mx-auto max-w-5xl space-y-6 pt-8">
       <div className="space-y-3">
         <Link
           to="/roles"

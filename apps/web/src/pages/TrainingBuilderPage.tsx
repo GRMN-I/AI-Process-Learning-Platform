@@ -318,7 +318,7 @@ export default function TrainingBuilderPage() {
   const hasSourceAsset = !!training?.source_storage_key;
 
   return (
-    <div className="mx-auto max-w-4xl space-y-8">
+    <div className="mx-auto max-w-5xl space-y-8 pt-8">
       {/* Header */}
       <div className="space-y-3">
         {training?.procedure_id && (
