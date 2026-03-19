@@ -37,6 +37,7 @@ def _serialize_user(user: User) -> UserOut:
                 "role": assignment.role,
             }
             for assignment in sorted(user.role_assignments, key=lambda item: (item.status != "active", item.created_at))
+            if assignment.role is not None and assignment.role_id is not None
         ],
     )
 
@@ -132,7 +133,7 @@ async def list_users(
         (
             await db.execute(
                 select(User)
-                .order_by(User.name.asc())
+                .order_by(User.updated_at.desc())
                 .options(selectinload(User.role_assignments).selectinload(UserRoleAssignment.role))
             )
         )

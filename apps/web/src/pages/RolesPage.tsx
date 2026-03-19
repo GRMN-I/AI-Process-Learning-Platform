@@ -139,9 +139,9 @@ export default function RolesPage() {
             </button>
           </form>
 
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-4">
             {isLoading ? (
-              <div className="col-span-full flex items-center justify-center py-20">
+              <div className="flex items-center justify-center py-20">
                 <Loader2 className="h-8 w-8 animate-spin text-indigo-500" />
               </div>
             ) : (
@@ -149,7 +149,7 @@ export default function RolesPage() {
                 <Link
                   key={role.id}
                   to={`/roles/${role.id}`}
-                  className="rounded-2xl border border-gray-200 bg-white p-5 transition hover:-translate-y-0.5 hover:shadow-md"
+                  className="block rounded-2xl border border-gray-200 bg-white p-5 transition hover:-translate-y-0.5 hover:shadow-md"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div>

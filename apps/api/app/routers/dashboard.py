@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.models.assignment import Assignment
 from app.models.change_event import ChangeEvent
-from app.models.incident import Incident, IncidentTrainingLink
+from app.models.incident import Incident, IncidentAnalysisRun, IncidentTrainingLink
 from app.models.procedure import Procedure, UserProcedureCompliance
 from app.models.role import Role
 from app.models.training import Training
@@ -21,6 +21,21 @@ async def get_dashboard(db: AsyncSession = Depends(get_db)):
     total_trainings_result = await db.execute(select(func.count(Training.id)))
     total_trainings = total_trainings_result.scalar() or 0
     total_procedures = (await db.execute(select(func.count(Procedure.id)))).scalar() or 0
+    resolved_incidents = (
+        await db.execute(
+            select(func.count(func.distinct(IncidentAnalysisRun.incident_id))).where(
+                IncidentAnalysisRun.resolution_summary.isnot(None),
+                func.length(func.trim(IncidentAnalysisRun.resolution_summary)) > 0,
+            )
+        )
+    ).scalar() or 0
+    pending_incidents = (
+        await db.execute(
+            select(func.count(Incident.id))
+            .outerjoin(IncidentAnalysisRun, Incident.id == IncidentAnalysisRun.incident_id)
+            .where(IncidentAnalysisRun.id.is_(None))
+        )
+    ).scalar() or 0
     total_roles = (await db.execute(select(func.count(Role.id)))).scalar() or 0
 
     total_assignments_result = await db.execute(select(func.count(Assignment.id)))
@@ -88,6 +103,8 @@ async def get_dashboard(db: AsyncSession = Depends(get_db)):
     return DashboardStats(
         total_trainings=total_trainings,
         total_procedures=total_procedures,
+        resolved_incidents=resolved_incidents,
+        pending_incidents=pending_incidents,
         total_roles=total_roles,
         total_assignments=total_assignments,
         completion_rate=completion_rate,

@@ -7,6 +7,7 @@ from sqlalchemy.orm import selectinload
 
 from app.core.database import get_db
 from app.core.deps import get_current_user
+from app.models.incident import Incident
 from app.models.procedure import Procedure, TaskProcedureLink
 from app.models.role import Role, RoleTaskLink, UserRoleAssignment
 from app.models.task import Task
@@ -27,8 +28,19 @@ from app.schemas.role import (
 router = APIRouter(prefix="/roles", tags=["roles"])
 
 
+def _procedure_count(role: Role) -> int:
+    procedure_ids: set[uuid.UUID] = set()
+    for link in role.task_links:
+        for procedure_link in link.task.procedure_links:
+            procedure_ids.add(procedure_link.procedure_id)
+    return len(procedure_ids)
+
+
 def _role_out(role: Role) -> RoleOut:
-    return RoleOut.model_validate(role)
+    return RoleOut(
+        **RoleOut.model_validate(role).model_dump(exclude={"procedure_count"}),
+        procedure_count=_procedure_count(role),
+    )
 
 
 def _role_detail_out(role: Role) -> RoleDetailOut:
@@ -78,7 +90,23 @@ async def _get_role_or_404(role_id: uuid.UUID, db: AsyncSession) -> Role:
 
 @router.get("", response_model=list[RoleOut])
 async def list_roles(db: AsyncSession = Depends(get_db)):
-    return [_role_out(role) for role in (await db.execute(select(Role).order_by(Role.name.asc()))).scalars().all()]
+    roles = list(
+        (
+            await db.execute(
+                select(Role)
+                .order_by(Role.updated_at.desc())
+                .options(
+                    selectinload(Role.task_links)
+                    .selectinload(RoleTaskLink.task)
+                    .selectinload(Task.procedure_links)
+                    .selectinload(TaskProcedureLink.procedure)
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return [_role_out(role) for role in roles]
 
 
 @router.post("", response_model=RoleOut, status_code=status.HTTP_201_CREATED)
@@ -120,6 +148,7 @@ async def list_user_role_assignments(db: AsyncSession = Depends(get_db)):
             created_at=item.created_at,
         )
         for item in assignments
+        if item.role is not None and item.user is not None
     ]
 
 
@@ -315,6 +344,41 @@ async def delete_role_procedure_link(
 @router.get("/{role_id}", response_model=RoleDetailOut)
 async def get_role(role_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
     return _role_detail_out(await _get_role_or_404(role_id, db))
+
+
+@router.delete("/{role_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_role(
+    role_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    role = (await db.execute(select(Role).where(Role.id == role_id))).scalar_one_or_none()
+    if role is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Role not found")
+
+    procedures = list(
+        (await db.execute(select(Procedure).where(Procedure.owner_role_id == role_id))).scalars().all()
+    )
+    for procedure in procedures:
+        procedure.owner_role_id = None
+
+    incidents = list((await db.execute(select(Incident).where(Incident.role_id == role_id))).scalars().all())
+    for incident in incidents:
+        incident.role_id = None
+
+    assignments = list(
+        (await db.execute(select(UserRoleAssignment).where(UserRoleAssignment.role_id == role_id))).scalars().all()
+    )
+    for assignment in assignments:
+        await db.delete(assignment)
+
+    task_links = list((await db.execute(select(RoleTaskLink).where(RoleTaskLink.role_id == role_id))).scalars().all())
+    for link in task_links:
+        await db.delete(link)
+
+    await db.delete(role)
+    await db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.patch("/{role_id}", response_model=RoleDetailOut)

@@ -112,7 +112,7 @@ async def create_training(
 
 @router.get("", response_model=list[TrainingOut])
 async def list_trainings(db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Training).order_by(Training.created_at.desc()))
+    result = await db.execute(select(Training).order_by(Training.updated_at.desc()))
     return [_serialize_training(item) for item in result.scalars().all()]
 
 

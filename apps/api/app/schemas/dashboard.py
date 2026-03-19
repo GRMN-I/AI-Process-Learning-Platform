@@ -4,6 +4,8 @@ from pydantic import BaseModel
 class DashboardStats(BaseModel):
     total_trainings: int
     total_procedures: int
+    resolved_incidents: int
+    pending_incidents: int
     total_roles: int
     total_assignments: int
     completion_rate: float
