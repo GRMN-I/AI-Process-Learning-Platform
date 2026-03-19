@@ -1,14 +1,16 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowRight, BookOpen, Loader2 } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import { getStoredUser } from "@/lib/auth";
-import { complianceStatusMeta, type ComplianceItem } from "@/lib/operatorData";
+import { readStatusMeta, trainingStatusMeta, type ComplianceItem } from "@/lib/operatorData";
 import api from "@/services/api";
 
 export default function OperatorProceduresPage() {
   const user = getStoredUser();
+  const [readFilter, setReadFilter] = useState<ComplianceItem["read_status"] | "all">("all");
+  const [trainingFilter, setTrainingFilter] = useState<ComplianceItem["training_status"] | "all">("all");
 
   const { data: compliance = [], isLoading } = useQuery<ComplianceItem[]>({
     queryKey: ["operator-procedures", user?.id],
@@ -26,6 +28,16 @@ export default function OperatorProceduresPage() {
     return Array.from(byProcedure.values());
   }, [compliance]);
 
+  const filteredProcedures = useMemo(
+    () =>
+      procedures.filter((item) => {
+        const matchesRead = readFilter === "all" || item.read_status === readFilter;
+        const matchesTraining = trainingFilter === "all" || item.training_status === trainingFilter;
+        return matchesRead && matchesTraining;
+      }),
+    [procedures, readFilter, trainingFilter],
+  );
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -39,8 +51,43 @@ export default function OperatorProceduresPage() {
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Procedimientos</h1>
         <p className="mt-1 text-sm text-gray-500">
-          Procedimientos visibles para tus roles activos, con acceso directo al training relacionado.
+          Procedimientos visibles para tus roles activos, con estado de lectura y training de la version vigente.
         </p>
+      </div>
+
+      <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+        <div className="flex flex-wrap items-end gap-4">
+          <label className="flex min-w-44 flex-col gap-2 text-sm">
+            <span className="font-medium text-gray-700">Filtrar por lectura</span>
+            <select
+              value={readFilter}
+              onChange={(event) => setReadFilter(event.target.value as ComplianceItem["read_status"] | "all")}
+              className="rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-700 outline-none transition focus:border-indigo-400"
+            >
+              <option value="all">Todos</option>
+              <option value="sin_leer">Sin leer</option>
+              <option value="leido">Leido</option>
+            </select>
+          </label>
+
+          <label className="flex min-w-44 flex-col gap-2 text-sm">
+            <span className="font-medium text-gray-700">Filtrar por training</span>
+            <select
+              value={trainingFilter}
+              onChange={(event) => setTrainingFilter(event.target.value as ComplianceItem["training_status"] | "all")}
+              className="rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-700 outline-none transition focus:border-indigo-400"
+            >
+              <option value="all">Todos</option>
+              <option value="sin_training">Sin training</option>
+              <option value="incompleto">Incompleto</option>
+              <option value="completo">Completo</option>
+            </select>
+          </label>
+
+          <div className="rounded-lg bg-gray-50 px-3 py-2 text-sm text-gray-600">
+            Mostrando {filteredProcedures.length} de {procedures.length}
+          </div>
+        </div>
       </div>
 
       {!procedures.length ? (
@@ -50,13 +97,16 @@ export default function OperatorProceduresPage() {
             No hay procedimientos asociados a este usuario.
           </p>
         </div>
+      ) : !filteredProcedures.length ? (
+        <div className="rounded-2xl border-2 border-dashed border-gray-200 py-16 text-center">
+          <BookOpen className="mx-auto h-10 w-10 text-gray-300" />
+          <p className="mt-3 text-sm font-medium text-gray-600">No hay procedimientos que coincidan con esos filtros.</p>
+        </div>
       ) : (
         <div className="grid gap-4 md:grid-cols-2">
-          {procedures.map((item) => {
-            const status = complianceStatusMeta[item.status] ?? {
-              label: item.status,
-              className: "bg-gray-100 text-gray-700",
-            };
+          {filteredProcedures.map((item) => {
+            const readStatus = readStatusMeta[item.read_status];
+            const trainingStatus = trainingStatusMeta[item.training_status];
 
             return (
               <Link
@@ -71,9 +121,14 @@ export default function OperatorProceduresPage() {
                     </p>
                     <h2 className="mt-1 text-lg font-semibold text-gray-900">{item.procedure_title}</h2>
                   </div>
-                  <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${status.className}`}>
-                    {status.label}
-                  </span>
+                  <div className="flex flex-col items-end gap-2">
+                    <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${readStatus.className}`}>
+                      {readStatus.label}
+                    </span>
+                    <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${trainingStatus.className}`}>
+                      {trainingStatus.label}
+                    </span>
+                  </div>
                 </div>
 
                 <div className="mt-4 flex flex-wrap gap-2 text-xs text-gray-500">
@@ -88,6 +143,11 @@ export default function OperatorProceduresPage() {
                   {item.training_title && (
                     <span className="rounded-full bg-indigo-50 px-2.5 py-1 text-indigo-700">
                       {item.training_title}
+                    </span>
+                  )}
+                  {item.read_at && (
+                    <span className="rounded-full bg-green-50 px-2.5 py-1 text-green-700">
+                      Leido {new Date(item.read_at).toLocaleDateString("es-AR")}
                     </span>
                   )}
                 </div>

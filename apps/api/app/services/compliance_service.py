@@ -10,13 +10,41 @@ from app.models.role import RoleTaskLink, UserRoleAssignment
 from app.models.training import Training
 
 
+def derive_training_status(training: Training | None, latest_assignment: Assignment | None) -> str:
+    if training is None:
+        return "sin_training"
+    if latest_assignment and latest_assignment.status == "completed":
+        return "completo"
+    return "incompleto"
+
+
+def derive_read_status(row: UserProcedureCompliance) -> str:
+    if (
+        row.procedure_version_id is not None
+        and row.read_procedure_version_id == row.procedure_version_id
+        and row.read_at is not None
+    ):
+        return "leido"
+    return "sin_leer"
+
+
+def derive_compliance_status(training: Training | None, latest_assignment: Assignment | None) -> str:
+    if latest_assignment and latest_assignment.status == "completed":
+        return "compliant"
+    if latest_assignment and latest_assignment.status == "in_progress":
+        return "in_training"
+    if training is None:
+        return "missing_training"
+    return "pending"
+
+
 async def sync_user_procedure_compliance(
     db: AsyncSession,
     *,
     user_ids: list[uuid.UUID] | None = None,
 ) -> list[UserProcedureCompliance]:
     role_assignment_query = select(UserRoleAssignment).where(UserRoleAssignment.status == "active")
-    if user_ids:
+    if user_ids is not None:
         role_assignment_query = role_assignment_query.where(UserRoleAssignment.user_id.in_(user_ids))
     role_assignments = list((await db.execute(role_assignment_query)).scalars().all())
 
@@ -111,25 +139,23 @@ async def sync_user_procedure_compliance(
         compliance.completed_at = latest_assignment.completed_at if latest_assignment else None
         compliance.last_score = latest_assignment.score if latest_assignment else None
 
-        if latest_assignment and latest_assignment.status == "completed":
-            compliance.status = "compliant"
-        elif latest_assignment and latest_assignment.status == "in_progress":
-            compliance.status = "in_training"
-        elif training is None:
-            compliance.status = "missing_training"
-        else:
-            compliance.status = "pending"
+        compliance.status = derive_compliance_status(training, latest_assignment)
 
         compliance.evidence_json = {
             "procedure_version_id": str(latest_version.id),
+            "read_procedure_version_id": (
+                str(compliance.read_procedure_version_id) if compliance.read_procedure_version_id else None
+            ),
+            "read_status": derive_read_status(compliance),
             "training_id": str(training.id) if training else None,
+            "training_status": derive_training_status(training, latest_assignment),
             "assignment_status": latest_assignment.status if latest_assignment else None,
         }
         compliance.updated_at = datetime.now(timezone.utc)
         compliances.append(compliance)
 
     # Remove stale compliance rows for the targeted users that no longer map to an active role/task/procedure requirement.
-    if user_ids:
+    if user_ids is not None:
         existing_query = select(UserProcedureCompliance).where(UserProcedureCompliance.user_id.in_(user_ids))
     else:
         existing_query = select(UserProcedureCompliance)
@@ -166,6 +192,16 @@ async def get_impacted_user_ids_for_procedure(db: AsyncSession, procedure_id: uu
             UserRoleAssignment.status == "active",
             RoleTaskLink.is_required.is_(True),
             TaskProcedureLink.procedure_id == procedure_id,
+        )
+    )
+    return list(dict.fromkeys(result.scalars().all()))
+
+
+async def get_active_user_ids_for_role(db: AsyncSession, role_id: uuid.UUID) -> list[uuid.UUID]:
+    result = await db.execute(
+        select(UserRoleAssignment.user_id).where(
+            UserRoleAssignment.role_id == role_id,
+            UserRoleAssignment.status == "active",
         )
     )
     return list(dict.fromkeys(result.scalars().all()))

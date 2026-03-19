@@ -20,14 +20,17 @@ from app.models.role import Role
 from app.models.training import Training
 from app.models.user import User
 from app.schemas.incident import (
+    IncidentAnalysisPreviewOut,
     IncidentAnalysisFindingOut,
+    IncidentAnalysisRunOut,
     IncidentAnalysisRunCreate,
     IncidentAnalysisRunUpdate,
-    IncidentAnalysisRunOut,
     IncidentCreate,
+    IncidentProcedurePreviewOut,
     IncidentLinkRequest,
     IncidentOut,
     IncidentRelatedMatchOut,
+    IncidentSimilarAnalysisPreviewOut,
     IncidentUpdate,
 )
 from app.schemas.task import TrainingSuggestion
@@ -425,15 +428,10 @@ async def update_incident_analysis_run(
     return _analysis_run_out(run)
 
 
-@router.post(
-    "/{incident_id}/analyze-procedures",
-    response_model=IncidentAnalysisRunOut,
-    status_code=status.HTTP_201_CREATED,
-)
+@router.post("/{incident_id}/analyze-procedures", response_model=IncidentAnalysisPreviewOut)
 async def analyze_incident_procedures(
     incident_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
 ):
     incident = (await db.execute(select(Incident).where(Incident.id == incident_id))).scalar_one_or_none()
     if incident is None:
@@ -445,132 +443,36 @@ async def analyze_incident_procedures(
 
     related_incidents = await get_similar_incident_analysis_runs(incident_id, incident.embedding, db=db)
     matches = await rank_procedure_versions_by_embedding(incident.embedding, limit=5, db=db, min_score=0.5)
-
-    created_run = IncidentAnalysisRun(
-        incident_id=incident_id,
-        source="ai",
-        analysis_summary=(
-            f"Analisis IA con {len(matches)} coincidencias semanticas y {len(related_incidents)} precedentes reutilizados."
-        ),
-        resolution_summary=(
-            "Se generaron hallazgos sugeridos para revisar cumplimiento, redefinicion o vacios procedimentales."
-        ),
-        created_by=current_user.id,
-    )
-    db.add(created_run)
-    await db.flush()
-
-    findings: list[IncidentAnalysisFinding] = []
-    used_procedure_versions: set[uuid.UUID] = set()
-    reused_missing_memory: set[tuple[str, str, str]] = set()
-
-    for match in matches:
-        procedure_version_id = match["procedure_version_id"]
-        if procedure_version_id in used_procedure_versions:
-            continue
-        used_procedure_versions.add(procedure_version_id)
-
-        precedent_findings: list[tuple[dict, IncidentAnalysisFinding]] = []
-        for related in related_incidents:
-            for prior_finding in related["analysis_run"].findings:
-                if prior_finding.procedure_version_id == procedure_version_id:
-                    precedent_findings.append((related, prior_finding))
-
-        reasoning_summary = (
-            "Coincidencia semántica entre la descripción del incidente y el procedimiento versionado. "
-            f"{f'Paso relevante: {match['step_title']}. ' if match.get('step_title') else ''}"
-            f"Fragmento relevante: {match['snippet']}"
-        )
-        finding_type = _infer_finding_type_for_match(incident, match, precedent_findings)
-        recommended_action = _default_action_for_type(finding_type)
-        confidence = match["score"]
-
-        if precedent_findings:
-            precedent_context = " ".join(
-                f"{build_incident_analysis_context(related)}. Hallazgo relacionado: {build_finding_memory_line(prior_finding)}."
-                for related, prior_finding in precedent_findings[:2]
+    return IncidentAnalysisPreviewOut(
+        procedure_matches=[
+            IncidentProcedurePreviewOut(
+                procedure_id=match["procedure_id"],
+                procedure_version_id=match["procedure_version_id"],
+                procedure_code=match["procedure_code"],
+                procedure_title=match["procedure_title"],
+                version_number=match["version_number"],
+                training_id=match["training_id"],
+                training_title=match["training_title"],
+                score=match["score"],
+                snippet=match["snippet"],
+                step_index=match.get("step_index"),
+                step_title=match.get("step_title"),
+                reference_segment_range=match.get("reference_segment_range"),
+                reference_quote=match.get("reference_quote"),
+                match_source=match.get("match_source"),
             )
-            reasoning_summary = f"{reasoning_summary} {precedent_context}"
-            dominant_finding = precedent_findings[0][1]
-            finding_type = _infer_finding_type_for_match(incident, match, precedent_findings)
-            recommended_action = dominant_finding.recommended_action or _default_action_for_type(finding_type)
-            confidence = max(confidence or 0, dominant_finding.confidence or 0, 0.6)
-
-        findings.append(
-            IncidentAnalysisFinding(
-                analysis_run_id=created_run.id,
-                procedure_version_id=procedure_version_id,
-                finding_type=finding_type,
-                confidence=min(confidence, 0.99) if confidence is not None else None,
-                reasoning_summary=reasoning_summary,
-                recommended_action=recommended_action,
-                status="suggested",
-            )
-        )
-
-    for related in related_incidents:
-        for prior_finding in related["analysis_run"].findings:
-            if prior_finding.finding_type != "missing_procedure" or prior_finding.procedure_version_id is not None:
-                continue
-            key = (
-                prior_finding.finding_type,
-                prior_finding.reasoning_summary or "",
-                prior_finding.recommended_action or "",
-            )
-            if key in reused_missing_memory:
-                continue
-            reused_missing_memory.add(key)
-            findings.append(
-                IncidentAnalysisFinding(
-                    analysis_run_id=created_run.id,
-                    procedure_version_id=None,
-                    finding_type="missing_procedure",
-                    confidence=min(related["similarity_score"], 0.95),
-                    reasoning_summary=(
-                        "Un incidente similar previo sugirio un vacio procedimental comparable. "
-                        f"{build_incident_analysis_context(related)}"
-                    ),
-                    recommended_action=prior_finding.recommended_action or _default_action_for_type("missing_procedure"),
-                    status="suggested",
-                )
-            )
-
-    should_add_gap_finding = not findings or _contains_any(incident.description or "", INCIDENT_GAP_HINTS)
-
-    if should_add_gap_finding:
-        findings.append(
-            IncidentAnalysisFinding(
-                analysis_run_id=created_run.id,
-                procedure_version_id=None,
-                finding_type="missing_procedure",
-                confidence=0.45,
-                reasoning_summary=(
-                    "No se encontro un procedimiento versionado con evidencia suficiente; podria existir un vacio "
-                    "procedimental o un control aun no estandarizado."
-                ),
-                recommended_action=_default_action_for_type("missing_procedure"),
-                status="suggested",
-            )
-        )
-
-    db.add_all(findings)
-
-    for related in related_incidents:
-        db.add(
-            IncidentRelatedMatch(
-                analysis_run_id=created_run.id,
-                related_incident_id=related["incident_id"],
-                related_analysis_run_id=related["analysis_run"].id,
+            for match in matches
+        ],
+        similar_analyses=[
+            IncidentSimilarAnalysisPreviewOut(
+                incident_id=related["incident_id"],
+                description=related["description"],
                 similarity_score=related["similarity_score"],
-                rationale="Precedente reutilizado para enriquecer los hallazgos del nuevo analisis.",
+                analysis_run=_analysis_run_out(related["analysis_run"]),
             )
-        )
-
-    await db.commit()
-    created_run = (
-        await db.execute(_analysis_run_query().where(IncidentAnalysisRun.id == created_run.id))
-    ).scalar_one()
-    return _analysis_run_out(created_run)
+            for related in related_incidents
+        ],
+    )
 
 
 @router.post("/{incident_id}/link-training", status_code=status.HTTP_201_CREATED)

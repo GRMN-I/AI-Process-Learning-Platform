@@ -221,6 +221,7 @@ async def _get_open_incident_signals_for_procedure(
                 .where(
                     ProcedureVersion.procedure_id == procedure_id,
                     Incident.status == "open",
+                    IncidentAnalysisRun.source == "manual",
                 )
                 .options(
                     selectinload(IncidentAnalysisFinding.analysis_run).selectinload(IncidentAnalysisRun.incident),
@@ -520,9 +521,8 @@ async def create_procedure_version(
         await persist_source_processing_result(db, version, _preview_to_artifacts(preview), upload_frame_assets=False)
     await sync_procedure_step_index(db, version)
     await db.commit()
-    if payload.recalculate_compliance:
-        await sync_procedure_rollout(db, procedure_id)
-        await db.commit()
+    await sync_procedure_rollout(db, procedure_id)
+    await db.commit()
     await db.refresh(version)
     if payload.source_asset and preview is None:
         asyncio.create_task(run_source_processing(version.id))
@@ -684,5 +684,9 @@ async def generate_training_from_procedure_version(
     db.add(job)
     await db.commit()
     await db.refresh(job)
+    latest_version = await get_latest_procedure_version(db, version.procedure_id)
+    if latest_version is not None and latest_version.id == version.id:
+        await sync_procedure_rollout(db, version.procedure_id)
+        await db.commit()
     asyncio.create_task(run_training_generation(training.id, job.id))
     return GenerateResponse(job_id=job.id, training_id=training.id)

@@ -179,6 +179,9 @@ class UserProcedureCompliance(Base):
     procedure_version_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("procedure_versions.id"), nullable=True
     )
+    read_procedure_version_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("procedure_versions.id"), nullable=True
+    )
     role_assignment_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("user_role_assignments.id"), nullable=True
     )
@@ -189,6 +192,7 @@ class UserProcedureCompliance(Base):
     status: Mapped[str] = mapped_column(String(50), default="pending")
     due_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
     evidence_json: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     updated_at: Mapped[datetime] = mapped_column(
@@ -199,7 +203,8 @@ class UserProcedureCompliance(Base):
 
     user = relationship("User", lazy="selectin")
     procedure = relationship("Procedure", lazy="selectin")
-    procedure_version = relationship("ProcedureVersion", lazy="selectin")
+    procedure_version = relationship("ProcedureVersion", foreign_keys=[procedure_version_id], lazy="selectin")
+    read_procedure_version = relationship("ProcedureVersion", foreign_keys=[read_procedure_version_id], lazy="selectin")
     role_assignment = relationship("UserRoleAssignment", lazy="selectin")
     training = relationship("Training", lazy="selectin")
     assignment = relationship("Assignment", lazy="selectin")

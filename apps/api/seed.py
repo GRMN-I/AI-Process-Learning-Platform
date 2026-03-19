@@ -1082,17 +1082,23 @@ async def seed(mode: str = "demo"):
                 incident = Incident(
                     description=item["description"],
                     severity=item["severity"],
+                    status="open",
                     role_id=roles[item["role_code"]].id,
                     location=item["location"],
                     created_by=admin.id,
+                    closed_by=None,
+                    closed_at=None,
                     embedding=await safe_embedding(item["embedding_text"], label=f"incident:{item['role_code']}"),
                 )
                 db.add(incident)
                 await db.flush()
             else:
                 incident.severity = item["severity"]
+                incident.status = "open"
                 incident.role_id = roles[item["role_code"]].id
                 incident.location = item["location"]
+                incident.closed_by = None
+                incident.closed_at = None
                 incident.embedding = await safe_embedding(item["embedding_text"], label=f"incident:{item['role_code']}")
 
             analysis_run = (
@@ -1114,6 +1120,7 @@ async def seed(mode: str = "demo"):
                 db.add(analysis_run)
                 await db.flush()
             else:
+                analysis_run.source = "manual"
                 analysis_run.analysis_summary = item["analysis_summary"]
                 analysis_run.resolution_summary = item["resolution_summary"]
                 analysis_run.created_by = admin.id

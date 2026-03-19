@@ -5,9 +5,13 @@ export interface ComplianceItem {
   procedure_id: string;
   procedure_title: string;
   procedure_version_id: string | null;
+  read_procedure_version_id: string | null;
+  read_status: "sin_leer" | "leido";
+  read_at: string | null;
   version_number: number | null;
   training_id: string | null;
   training_title: string | null;
+  training_status: "sin_training" | "incompleto" | "completo";
   assignment_id: string | null;
   role_assignment_id: string | null;
   role_name: string | null;
@@ -99,11 +103,15 @@ export interface RoleOption {
   name: string;
 }
 
-export const complianceStatusMeta: Record<string, { label: string; className: string }> = {
-  assigned: { label: "Asignado", className: "bg-blue-100 text-blue-800" },
-  in_progress: { label: "En progreso", className: "bg-amber-100 text-amber-800" },
-  completed: { label: "Completado", className: "bg-green-100 text-green-800" },
-  overdue: { label: "Vencido", className: "bg-red-100 text-red-800" },
+export const readStatusMeta: Record<ComplianceItem["read_status"], { label: string; className: string }> = {
+  sin_leer: { label: "Sin leer", className: "bg-amber-100 text-amber-800" },
+  leido: { label: "Leido", className: "bg-green-100 text-green-800" },
+};
+
+export const trainingStatusMeta: Record<ComplianceItem["training_status"], { label: string; className: string }> = {
+  sin_training: { label: "Sin training", className: "bg-gray-100 text-gray-700" },
+  incompleto: { label: "Incompleto", className: "bg-blue-100 text-blue-800" },
+  completo: { label: "Completo", className: "bg-indigo-100 text-indigo-800" },
 };
 
 export const incidentSeverityMeta: Record<string, { label: string; className: string }> = {

@@ -1,10 +1,10 @@
 import { useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, BookOpenCheck, ClipboardList, Loader2 } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 
 import { getStoredUser } from "@/lib/auth";
-import type { ComplianceItem } from "@/lib/operatorData";
+import { readStatusMeta, trainingStatusMeta, type ComplianceItem } from "@/lib/operatorData";
 import api from "@/services/api";
 
 interface ProcedureStructure {
@@ -47,6 +47,7 @@ interface ProcedureDetail {
 export default function OperatorProcedureDetailPage() {
   const { id } = useParams<{ id: string }>();
   const user = getStoredUser();
+  const queryClient = useQueryClient();
 
   const { data: compliance = [], isLoading: complianceLoading } = useQuery<ComplianceItem[]>({
     queryKey: ["operator-procedure-compliance", user?.id],
@@ -70,6 +71,21 @@ export default function OperatorProcedureDetailPage() {
     return [...versions].sort((a, b) => b.version_number - a.version_number)[0] ?? null;
   }, [procedure]);
   const displayStructure = latestVersion?.content_json ?? latestVersion?.source_result?.structure ?? null;
+  const readStatus = complianceItem ? readStatusMeta[complianceItem.read_status] : null;
+  const trainingStatus = complianceItem ? trainingStatusMeta[complianceItem.training_status] : null;
+
+  const markAsReadMutation = useMutation({
+    mutationFn: () => api.post(`/compliance/${complianceItem?.id}/mark-read`).then((r) => r.data),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["operator-procedure-compliance", user?.id] }),
+        queryClient.invalidateQueries({ queryKey: ["operator-procedures", user?.id] }),
+        queryClient.invalidateQueries({ queryKey: ["operator-home", "compliance", user?.id] }),
+        queryClient.invalidateQueries({ queryKey: ["operator-training", "compliance", user?.id] }),
+        queryClient.invalidateQueries({ queryKey: ["operator-trainings", "compliance", user?.id] }),
+      ]);
+    },
+  });
 
   if (complianceLoading || procedureLoading) {
     return (
@@ -131,10 +147,38 @@ export default function OperatorProcedureDetailPage() {
             <span className="rounded-full bg-gray-100 px-2.5 py-1">
               {latestVersion ? `Versión v${latestVersion.version_number}` : "Sin versión"}
             </span>
+            {readStatus && (
+              <span className={`rounded-full px-2.5 py-1 font-medium ${readStatus.className}`}>{readStatus.label}</span>
+            )}
+            {trainingStatus && (
+              <span className={`rounded-full px-2.5 py-1 font-medium ${trainingStatus.className}`}>
+                {trainingStatus.label}
+              </span>
+            )}
             {complianceItem.last_score != null && (
               <span className="rounded-full bg-green-50 px-2.5 py-1 text-green-700">
                 Último score: {complianceItem.last_score}%
               </span>
+            )}
+            {complianceItem.read_at && (
+              <span className="rounded-full bg-green-50 px-2.5 py-1 text-green-700">
+                Leido {new Date(complianceItem.read_at).toLocaleString("es-AR")}
+              </span>
+            )}
+          </div>
+
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={() => markAsReadMutation.mutate()}
+              disabled={complianceItem.read_status === "leido" || markAsReadMutation.isPending}
+              className="inline-flex items-center gap-2 rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-700 hover:border-indigo-300 hover:text-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {markAsReadMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              {complianceItem.read_status === "leido" ? "Procedimiento leido" : "Marcar como leido"}
+            </button>
+            {complianceItem.training_status !== "sin_training" && !complianceItem.assignment_id && (
+              <p className="text-sm text-gray-500">El training de esta version existe, pero todavia no tiene asignacion visible.</p>
             )}
           </div>
         </div>

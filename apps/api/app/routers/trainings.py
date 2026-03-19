@@ -24,6 +24,7 @@ from app.schemas.training import (
     TrainingOut,
 )
 from app.services.ai_pipeline import run_training_generation
+from app.services.compliance_service import get_latest_procedure_version, sync_procedure_rollout
 
 router = APIRouter(prefix="/trainings", tags=["trainings"])
 
@@ -106,6 +107,10 @@ async def create_training(
     )
     db.add(training)
     await db.commit()
+    latest_version = await get_latest_procedure_version(db, version.procedure_id)
+    if latest_version is not None and latest_version.id == version.id:
+        await sync_procedure_rollout(db, version.procedure_id)
+        await db.commit()
     await db.refresh(training)
     return _serialize_training(training)
 
@@ -282,6 +287,12 @@ async def publish_training(
 
     training.status = "published"
     await db.commit()
+    version = training.procedure_version
+    if version is not None:
+        latest_version = await get_latest_procedure_version(db, version.procedure_id)
+        if latest_version is not None and latest_version.id == version.id:
+            await sync_procedure_rollout(db, version.procedure_id)
+            await db.commit()
     await db.refresh(training)
     return _serialize_training(training)
 

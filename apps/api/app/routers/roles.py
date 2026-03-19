@@ -24,6 +24,7 @@ from app.schemas.role import (
     UserRoleAssignmentCreate,
     UserRoleAssignmentOut,
 )
+from app.services.compliance_service import get_active_user_ids_for_role, sync_procedure_rollout, sync_user_procedure_compliance
 
 router = APIRouter(prefix="/roles", tags=["roles"])
 
@@ -264,6 +265,11 @@ async def create_role_procedure_link(
     if existing_link is not None:
         existing_link.is_required = payload.is_required
         await db.commit()
+        if payload.is_required:
+            await sync_procedure_rollout(db, procedure.id)
+        else:
+            await sync_user_procedure_compliance(db, user_ids=await get_active_user_ids_for_role(db, role.id))
+        await db.commit()
         await db.refresh(existing_link)
         return RoleProcedureLinkOut(
             id=existing_link.task_id,
@@ -284,6 +290,11 @@ async def create_role_procedure_link(
 
     db.add(RoleTaskLink(role_id=role.id, task_id=task.id, is_required=payload.is_required))
     db.add(TaskProcedureLink(task_id=task.id, procedure_id=procedure.id, is_primary=True))
+    await db.commit()
+    if payload.is_required:
+        await sync_procedure_rollout(db, procedure.id)
+    else:
+        await sync_user_procedure_compliance(db, user_ids=await get_active_user_ids_for_role(db, role.id))
     await db.commit()
 
     return RoleProcedureLinkOut(
@@ -336,7 +347,10 @@ async def delete_role_procedure_link(
             detail="Task is not a dedicated role-procedure link",
         )
 
+    role_id = task.role_links[0].role_id
     await db.delete(task)
+    await db.commit()
+    await sync_user_procedure_compliance(db, user_ids=await get_active_user_ids_for_role(db, role_id))
     await db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 

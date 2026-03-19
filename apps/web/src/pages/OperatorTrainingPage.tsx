@@ -76,6 +76,9 @@ export default function OperatorTrainingPage() {
         queryClient.invalidateQueries({ queryKey: ["operator-home", "assignments", user?.id] }),
         queryClient.invalidateQueries({ queryKey: ["operator-home", "compliance", user?.id] }),
         queryClient.invalidateQueries({ queryKey: ["operator-procedures", user?.id] }),
+        queryClient.invalidateQueries({ queryKey: ["operator-procedure-compliance", user?.id] }),
+        queryClient.invalidateQueries({ queryKey: ["operator-training", "compliance", user?.id] }),
+        queryClient.invalidateQueries({ queryKey: ["operator-trainings", "compliance", user?.id] }),
       ]);
       navigate("/trainings");
     },

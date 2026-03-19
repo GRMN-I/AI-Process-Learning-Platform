@@ -38,13 +38,21 @@ interface IncidentRecord {
   closed_by?: string | null;
 }
 
-interface SuggestedTraining {
+interface ProcedurePreviewMatch {
   procedure_id?: string | null;
   procedure_version_id?: string | null;
+  procedure_code?: string | null;
+  procedure_title?: string | null;
+  version_number?: number | null;
   training_id?: string | null;
-  title: string;
+  training_title?: string | null;
   score: number;
-  snippet?: string | null;
+  snippet: string;
+  step_index?: number | null;
+  step_title?: string | null;
+  reference_segment_range?: string | null;
+  reference_quote?: string | null;
+  match_source?: string | null;
 }
 
 type FindingType =
@@ -88,6 +96,16 @@ interface AnalysisRun {
     related_findings: AnalysisFinding[];
     similarity_score?: number | null;
     rationale?: string | null;
+  }>;
+}
+
+interface IncidentAnalysisPreview {
+  procedure_matches: ProcedurePreviewMatch[];
+  similar_analyses: Array<{
+    incident_id: string;
+    description: string;
+    similarity_score: number;
+    analysis_run: AnalysisRun;
   }>;
 }
 
@@ -337,6 +355,7 @@ export default function IncidentDetailPage() {
   const [form, setForm] = useState(emptyForm);
   const [error, setError] = useState("");
   const [analysisDraft, setAnalysisDraft] = useState<AnalysisDraft>(emptyAnalysisDraft());
+  const [analysisPreview, setAnalysisPreview] = useState<IncidentAnalysisPreview | null>(null);
 
   const { data: incident, isLoading } = useQuery<IncidentRecord>({
     queryKey: ["incident", id],
@@ -353,15 +372,6 @@ export default function IncidentDetailPage() {
     queryFn: () => api.get("/procedures").then((r) => r.data),
   });
   const {
-    data: suggestions = [],
-    isLoading: suggestionsLoading,
-    refetch: refetchSuggestions,
-  } = useQuery<SuggestedTraining[]>({
-    queryKey: ["incident-suggestions", id],
-    queryFn: () => api.get(`/incidents/${id}/suggest-trainings`).then((r) => r.data),
-    enabled: Boolean(id) && !isCreating,
-  });
-  const {
     data: analysisRuns = [],
     isLoading: analysisLoading,
     refetch: refetchAnalysisRuns,
@@ -374,6 +384,7 @@ export default function IncidentDetailPage() {
   useEffect(() => {
     if (!incident) {
       setAnalysisDraft(emptyAnalysisDraft());
+      setAnalysisPreview(null);
       return;
     }
     setForm({
@@ -382,6 +393,7 @@ export default function IncidentDetailPage() {
       role_id: incident.role_id ?? "",
       location: incident.location ?? "",
     });
+    setAnalysisPreview(null);
   }, [incident]);
 
   const createMutation = useMutation({
@@ -424,13 +436,9 @@ export default function IncidentDetailPage() {
     },
   });
   const analyzeMutation = useMutation({
-    mutationFn: () => api.post(`/incidents/${id}/analyze-procedures`).then((r) => r.data as AnalysisRun),
-    onSuccess: async () => {
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["incident-analysis-runs", id] }),
-        queryClient.invalidateQueries({ queryKey: ["incident-suggestions", id] }),
-      ]);
-      await Promise.all([refetchAnalysisRuns(), refetchSuggestions()]);
+    mutationFn: () => api.post(`/incidents/${id}/analyze-procedures`).then((r) => r.data as IncidentAnalysisPreview),
+    onSuccess: (data) => {
+      setAnalysisPreview(data);
       setError("");
     },
     onError: (mutationError) => {
@@ -472,15 +480,6 @@ export default function IncidentDetailPage() {
     },
     onError: (mutationError) => {
       setError(getErrorMessage(mutationError, "No se pudo guardar el análisis manual."));
-    },
-  });
-  const linkMutation = useMutation({
-    mutationFn: (trainingId: string) => api.post(`/incidents/${id}/link-training`, { training_id: trainingId }),
-    onSuccess: () => {
-      setError("");
-    },
-    onError: (mutationError) => {
-      setError(getErrorMessage(mutationError, "No se pudo vincular el training."));
     },
   });
 
@@ -530,11 +529,15 @@ export default function IncidentDetailPage() {
     createMutation.isPending ||
     updateMutation.isPending ||
     analyzeMutation.isPending ||
-    saveAnalysisMutation.isPending ||
-    linkMutation.isPending;
+    saveAnalysisMutation.isPending;
   const isClosed = incident?.status === "closed";
-  const needsRedefinitionCount = analysisRuns.flatMap((run) => run.findings).filter((finding) => finding.finding_type === "needs_redefinition").length;
-  const suggestedCount = analysisRuns.flatMap((run) => run.findings).filter((finding) => finding.status === "suggested").length;
+  const manualAnalysisRuns = analysisRuns.filter((run) => run.source === "manual");
+  const needsRedefinitionCount = manualAnalysisRuns
+    .flatMap((run) => run.findings)
+    .filter((finding) => finding.finding_type === "needs_redefinition").length;
+  const confirmedCount = manualAnalysisRuns
+    .flatMap((run) => run.findings)
+    .filter((finding) => finding.status === "confirmed").length;
 
   if (!isCreating && (isLoading || !incident)) {
     return (
@@ -595,8 +598,8 @@ export default function IncidentDetailPage() {
             {!isCreating && incident && (
               <div className="grid min-w-[220px] gap-3 sm:grid-cols-2">
                 <div className="rounded-2xl bg-gray-50 px-4 py-3">
-                  <p className="text-xs uppercase tracking-wide text-gray-400">Hallazgos sugeridos</p>
-                  <p className="mt-1 text-lg font-semibold text-gray-900">{suggestedCount}</p>
+                  <p className="text-xs uppercase tracking-wide text-gray-400">Hallazgos manuales</p>
+                  <p className="mt-1 text-lg font-semibold text-gray-900">{confirmedCount}</p>
                 </div>
                 <div className="rounded-2xl bg-gray-50 px-4 py-3">
                   <p className="text-xs uppercase tracking-wide text-gray-400">Needs redefinition</p>
@@ -691,7 +694,7 @@ export default function IncidentDetailPage() {
               <div>
                 <h2 className="text-lg font-semibold text-gray-900">Acciones del análisis</h2>
                 <p className="mt-1 text-sm text-gray-500">
-                  Ejecuta el análisis semántico, revisa hallazgos y decide cuándo cerrar la incidencia.
+                  Ejecuta una consulta exploratoria sobre procedimientos actuales y precedentes similares. La vinculación real se guarda sólo en el análisis manual.
                 </p>
               </div>
               <div className="flex flex-wrap gap-3">
@@ -725,61 +728,100 @@ export default function IncidentDetailPage() {
           <section className="rounded-2xl border border-gray-200 bg-white p-6">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <h2 className="text-lg font-semibold text-gray-900">Procedimientos y remediaciones relacionadas</h2>
+                <h2 className="text-lg font-semibold text-gray-900">Preview semántico</h2>
                 <p className="mt-1 text-sm text-gray-500">
-                  Coincidencias semánticas con procedimientos actuales y trainings derivados disponibles.
+                  Procedimientos actuales y análisis previos similares detectados a partir de la descripción guardada.
                 </p>
               </div>
             </div>
             <div className="mt-5 space-y-3">
-              {suggestionsLoading ? (
+              {analyzeMutation.isPending ? (
                 <div className="flex items-center gap-2 text-sm text-gray-400">
                   <Loader2 className="h-4 w-4 animate-spin" />
                   Buscando coincidencias semánticas...
                 </div>
-              ) : suggestions.length ? (
-                suggestions.map((suggestion) => (
+              ) : analysisPreview ? (
+                <>
+                  {analysisPreview.procedure_matches.length ? (
+                    analysisPreview.procedure_matches.map((match) => (
                   <div
-                    key={suggestion.training_id ?? suggestion.procedure_version_id ?? suggestion.title}
+                    key={match.procedure_version_id ?? `${match.procedure_id}-${match.score}`}
                     className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-4"
                   >
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium text-gray-900">{suggestion.title}</p>
-                        <p className="mt-1 text-xs text-gray-500">Relación: {(suggestion.score * 100).toFixed(0)}%</p>
-                        {suggestion.snippet && (
-                          <p className="mt-2 text-sm text-gray-600">{suggestion.snippet}</p>
+                        <p className="text-sm font-medium text-gray-900">
+                          {match.procedure_code} · {match.procedure_title}
+                          {match.version_number != null ? ` · v${match.version_number}` : ""}
+                        </p>
+                        <p className="mt-1 text-xs text-gray-500">Relación: {(match.score * 100).toFixed(0)}%</p>
+                        {match.step_title && (
+                          <p className="mt-2 text-xs font-medium text-gray-500">
+                            Paso {match.step_index}: {match.step_title}
+                          </p>
+                        )}
+                        <p className="mt-2 text-sm text-gray-600">{match.snippet}</p>
+                        {match.reference_segment_range && (
+                          <p className="mt-2 text-xs text-gray-500">Referencia fuente: {match.reference_segment_range}</p>
+                        )}
+                        {match.training_title && (
+                          <p className="mt-2 text-xs text-gray-500">Training derivado disponible: {match.training_title}</p>
                         )}
                       </div>
                       <div className="flex flex-wrap gap-2">
-                        {suggestion.procedure_id && (
+                        {match.procedure_id && (
                           <Link
-                            to={`/procedures/${suggestion.procedure_id}`}
+                            to={`/procedures/${match.procedure_id}`}
                             className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-white"
                           >
                             Ver procedimiento
                           </Link>
                         )}
-                        {suggestion.training_id ? (
-                          <button
-                            type="button"
-                            onClick={() => linkMutation.mutate(suggestion.training_id as string)}
-                            disabled={isClosed || linkMutation.isPending}
-                            className="inline-flex items-center gap-1 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-60"
-                          >
-                            <LinkIcon className="h-3 w-3" />
-                            Vincular training
-                          </button>
-                        ) : (
-                          <span className="rounded-lg bg-white px-3 py-1.5 text-xs text-gray-500">Sin training derivado</span>
-                        )}
                       </div>
                     </div>
                   </div>
-                ))
+                    ))
+                  ) : (
+                    <div className="rounded-xl border border-dashed border-gray-200 px-4 py-5 text-sm text-gray-500">
+                      No se encontraron procedimientos actuales suficientemente relacionados.
+                    </div>
+                  )}
+
+                  <div className="pt-2">
+                    <h3 className="text-sm font-semibold text-gray-900">Análisis previos similares</h3>
+                    <div className="mt-3 space-y-3">
+                      {analysisPreview.similar_analyses.length ? (
+                        analysisPreview.similar_analyses.map((related) => (
+                          <div key={`${related.incident_id}-${related.analysis_run.id}`} className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-4">
+                            <div className="flex flex-wrap items-start justify-between gap-3">
+                              <div className="min-w-0 flex-1">
+                                <p className="text-sm font-medium text-gray-900">{related.description}</p>
+                                <p className="mt-1 text-xs text-gray-500">
+                                  Similitud: {(related.similarity_score * 100).toFixed(0)}%
+                                </p>
+                                {related.analysis_run.analysis_summary && (
+                                  <p className="mt-2 text-sm text-gray-600">{related.analysis_run.analysis_summary}</p>
+                                )}
+                                {related.analysis_run.resolution_summary && (
+                                  <p className="mt-1 text-xs text-gray-500">
+                                    Resolución previa: {related.analysis_run.resolution_summary}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="rounded-xl border border-dashed border-gray-200 px-4 py-5 text-sm text-gray-500">
+                          No se encontraron análisis previos semánticamente similares.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </>
               ) : (
                 <p className="text-sm text-gray-500">
-                  Todavía no hay sugerencias disponibles. Ejecuta el análisis para producir hallazgos iniciales.
+                  Ejecuta el análisis para obtener un preview no persistente basado en la descripción guardada.
                 </p>
               )}
             </div>
@@ -790,7 +832,7 @@ export default function IncidentDetailPage() {
               <div>
                 <h2 className="text-lg font-semibold text-gray-900">Historial de análisis</h2>
                 <p className="mt-1 text-sm text-gray-500">
-                  Runs automáticos y manuales, con hallazgos clasificados y precedentes reutilizados.
+                  Sólo análisis manuales persistidos. Aquí es donde se crean las vinculaciones incidencia-procedimiento.
                 </p>
               </div>
             </div>
@@ -800,8 +842,8 @@ export default function IncidentDetailPage() {
                   <Loader2 className="h-4 w-4 animate-spin" />
                   Cargando análisis previos...
                 </div>
-              ) : analysisRuns.length ? (
-                analysisRuns.map((run) => (
+              ) : manualAnalysisRuns.length ? (
+                manualAnalysisRuns.map((run) => (
                   <div
                     key={run.id}
                     className={`rounded-xl border px-4 py-4 ${
@@ -826,7 +868,7 @@ export default function IncidentDetailPage() {
                           {new Date(run.created_at).toLocaleString("es-AR")}
                         </p>
                       </div>
-                      {run.source === "manual" && !isClosed && (
+                      {!isClosed && (
                         <button
                           type="button"
                           onClick={() => setAnalysisDraft(buildDraftFromRun(run))}
@@ -920,7 +962,7 @@ export default function IncidentDetailPage() {
                   {analysisDraft.run_id ? "Editar análisis manual" : "Guardar análisis manual"}
                 </h2>
                 <p className="mt-1 text-sm text-gray-500">
-                  Confirma o corrige la clasificación automática con hallazgos accionables.
+                  Define manualmente los hallazgos y selecciona el procedimiento sólo cuando quieras crear una vinculación persistida.
                 </p>
               </div>
               {analysisDraft.run_id && (

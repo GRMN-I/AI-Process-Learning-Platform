@@ -138,6 +138,35 @@ class IncidentAnalysisRunOut(BaseModel):
     related_matches: list[IncidentRelatedMatchOut] = Field(default_factory=list)
 
 
+class IncidentProcedurePreviewOut(BaseModel):
+    procedure_id: uuid.UUID
+    procedure_version_id: uuid.UUID
+    procedure_code: str
+    procedure_title: str
+    version_number: int
+    training_id: uuid.UUID | None = None
+    training_title: str | None = None
+    score: float
+    snippet: str
+    step_index: int | None = None
+    step_title: str | None = None
+    reference_segment_range: str | None = None
+    reference_quote: str | None = None
+    match_source: str | None = None
+
+
+class IncidentSimilarAnalysisPreviewOut(BaseModel):
+    incident_id: uuid.UUID
+    description: str
+    similarity_score: float
+    analysis_run: IncidentAnalysisRunOut
+
+
+class IncidentAnalysisPreviewOut(BaseModel):
+    procedure_matches: list[IncidentProcedurePreviewOut] = Field(default_factory=list)
+    similar_analyses: list[IncidentSimilarAnalysisPreviewOut] = Field(default_factory=list)
+
+
 class IncidentLinkRequest(BaseModel):
     training_id: uuid.UUID
     source: str = "manual"
