@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowRight, AlertTriangle, BookOpen, ClipboardList, Loader2 } from "lucide-react";
+import { AlertTriangle, BookOpen, ChevronRight, ClipboardList, Loader2 } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import { getStoredUser } from "@/lib/auth";
@@ -41,7 +41,7 @@ export default function OperatorHomePage() {
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
-      <div className="rounded-3xl bg-gradient-to-br from-indigo-600 via-indigo-600 to-violet-600 p-8 text-white shadow-lg">
+      <div className="rounded-3xl bg-gradient-to-br from-indigo-600 via-indigo-600 to-indigo-700 p-8 text-white shadow-lg">
         <p className="text-sm font-medium text-indigo-100">Home operativa</p>
         <h1 className="mt-2 text-3xl font-bold">Hola, {user?.name ?? "Operador"}</h1>
         <p className="mt-3 max-w-2xl text-sm text-indigo-100">
@@ -54,7 +54,7 @@ export default function OperatorHomePage() {
             className="inline-flex items-center gap-2 rounded-lg bg-white px-4 py-2.5 text-sm font-medium text-indigo-700 transition hover:bg-indigo-50"
           >
             Ir a mis trainings
-            <ArrowRight className="h-4 w-4" />
+            <ChevronRight className="h-4 w-4" />
           </Link>
           <Link
             to="/incidents"
@@ -95,8 +95,8 @@ export default function OperatorHomePage() {
                 Procedimientos relevantes según tus roles actuales.
               </p>
             </div>
-            <Link to="/procedures" className="text-sm font-medium text-indigo-600 hover:text-indigo-700">
-              Ver todos
+            <Link to="/procedures" className="text-indigo-600 hover:text-indigo-700">
+              <ChevronRight className="h-5 w-5 shrink-0" />
             </Link>
           </div>
 
@@ -131,8 +131,8 @@ export default function OperatorHomePage() {
               <h2 className="text-lg font-semibold text-gray-900">Próximos trainings</h2>
               <p className="mt-1 text-sm text-gray-500">Continuá tus capacitaciones pendientes.</p>
             </div>
-            <Link to="/trainings" className="text-sm font-medium text-indigo-600 hover:text-indigo-700">
-              Ver todos
+            <Link to="/trainings" className="text-indigo-600 hover:text-indigo-700">
+              <ChevronRight className="h-5 w-5 shrink-0" />
             </Link>
           </div>
 
@@ -178,7 +178,7 @@ function SummaryCard({
   return (
     <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
       <div className="flex items-center justify-between">
-        <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gray-50">{icon}</div>
+        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-50">{icon}</div>
         <span className="text-2xl font-bold text-gray-900">{value}</span>
       </div>
       <p className="mt-4 text-sm font-medium text-gray-900">{label}</p>

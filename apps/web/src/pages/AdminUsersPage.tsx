@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowRight, Loader2, Mail, MapPin, Plus, Users, X } from "lucide-react";
+import { ChevronRight, Loader2, Mail, MapPin, Plus, Users, X } from "lucide-react";
 
 import api from "@/services/api";
 
@@ -340,7 +340,7 @@ export default function AdminUsersPage() {
                       <span className="truncate">{user.email}</span>
                     </p>
                   </div>
-                  <ArrowRight className="h-5 w-5 flex-shrink-0 text-gray-300" />
+                  <ChevronRight className="h-5 w-5 flex-shrink-0 text-gray-300" />
                 </div>
 
                 <div className="mt-4 flex flex-wrap gap-2 text-xs text-gray-500">

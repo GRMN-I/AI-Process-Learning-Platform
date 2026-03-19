@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, ArrowRight, Clock3, Loader2, Plus } from "lucide-react";
+import { AlertTriangle, ChevronRight, Clock3, Loader2, Plus } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import api from "@/services/api";
@@ -148,7 +148,7 @@ export default function AdminIncidentsPage() {
                       : new Date(incident.created_at).toLocaleString("es-AR")}
                   </div>
                 </div>
-                <ArrowRight className="h-5 w-5 flex-shrink-0 text-gray-300" />
+                <ChevronRight className="h-5 w-5 flex-shrink-0 text-gray-300" />
               </div>
             </Link>
           ))}

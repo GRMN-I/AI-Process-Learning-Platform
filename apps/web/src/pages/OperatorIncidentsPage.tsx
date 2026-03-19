@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, Loader2, Plus } from "lucide-react";
+import { AlertTriangle, ChevronRight, Loader2, Plus } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import { incidentSeverityMeta, type IncidentItem, type RoleOption } from "@/lib/operatorData";
@@ -44,7 +44,7 @@ export default function OperatorIncidentsPage() {
   });
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6">
+    <div className="mx-auto max-w-5xl space-y-6">
       <div className="flex items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Incidencias</h1>
@@ -168,7 +168,7 @@ export default function OperatorIncidentsPage() {
                 to={`/incidents/${incident.id}`}
                 className="block rounded-2xl border border-gray-200 bg-white p-5 transition hover:shadow-md"
               >
-                <div className="flex items-start justify-between gap-4">
+                <div className="flex items-center justify-between gap-4">
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${severity.className}`}>
@@ -186,7 +186,7 @@ export default function OperatorIncidentsPage() {
                       {incident.location ? ` · ${incident.location}` : ""}
                     </p>
                   </div>
-                  <span className="text-sm font-medium text-indigo-600">Ver detalle</span>
+                  <ChevronRight className="h-5 w-5 shrink-0 text-indigo-600" />
                 </div>
               </Link>
             );

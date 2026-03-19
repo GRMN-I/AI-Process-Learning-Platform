@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowRight, BookOpen, Loader2 } from "lucide-react";
+import { BookOpen, ChevronRight, Loader2 } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import { getStoredUser } from "@/lib/auth";
@@ -154,7 +154,7 @@ export default function OperatorProceduresPage() {
 
                 <div className="mt-4 inline-flex items-center gap-2 text-sm font-medium text-indigo-600">
                   Ver detalle
-                  <ArrowRight className="h-4 w-4" />
+                  <ChevronRight className="h-4 w-4" />
                 </div>
               </Link>
             );
