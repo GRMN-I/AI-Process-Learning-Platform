@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertCircle, ArrowLeft, FileText, Loader2, Sparkles, Trash2 } from "lucide-react";
+import { AlertCircle, ArrowLeft, CheckCircle2, FileText, Loader2, Sparkles, Trash2 } from "lucide-react";
 
 import api from "@/services/api";
 
@@ -92,23 +92,37 @@ interface SourceDocumentItem {
   meta?: string | null;
 }
 
-const ACTIVE_SOURCE_PROCESSING_STATUSES = [
+type SourceProcessingStage = (typeof SOURCE_PROCESSING_FLOW)[number];
+
+const SOURCE_PROCESSING_FLOW = ["UPLOADED", "TRANSCRIBING", "CHUNKING", "EXTRACTING", "INDEXING", "READY"] as const;
+const ACTIVE_SOURCE_PROCESSING_STATUSES: readonly SourceProcessingStage[] = [
   "UPLOADED",
   "TRANSCRIBING",
   "CHUNKING",
-  "INDEXING",
   "EXTRACTING",
-] as const;
+  "INDEXING",
+];
 
 const SOURCE_PROCESSING_STATUS_LABELS: Record<string, string> = {
   pending: "Pendiente",
   UPLOADED: "Video subido",
   TRANSCRIBING: "Transcribiendo audio",
   CHUNKING: "Capturando frames",
-  INDEXING: "Indexando segmentos",
   EXTRACTING: "Extrayendo conocimiento",
+  INDEXING: "Indexando segmentos",
   READY: "Listo",
   FAILED: "Error",
+};
+
+const SOURCE_PROCESSING_PROGRESS: Record<string, number> = {
+  pending: 0,
+  UPLOADED: 10,
+  TRANSCRIBING: 30,
+  CHUNKING: 50,
+  EXTRACTING: 70,
+  INDEXING: 85,
+  READY: 100,
+  FAILED: 100,
 };
 
 const SEVERITY_LABELS: Record<string, string> = {
@@ -132,6 +146,10 @@ function getErrorMessage(error: unknown, fallback: string) {
 
 function getSourceProcessingLabel(status: string) {
   return SOURCE_PROCESSING_STATUS_LABELS[status] ?? status;
+}
+
+function isActiveSourceProcessingStatus(status: string): status is (typeof ACTIVE_SOURCE_PROCESSING_STATUSES)[number] {
+  return ACTIVE_SOURCE_PROCESSING_STATUSES.includes(status as (typeof ACTIVE_SOURCE_PROCESSING_STATUSES)[number]);
 }
 
 function getSeverityLabel(severity?: string | null) {
@@ -159,6 +177,18 @@ function getDisplayStructure(version: ProcedureVersion | null): NormalizedProced
 }
 
 function buildGeneratedText(version: ProcedureVersion | null, signal: ProcedureIncidentSignal | null): string[] {
+  if (!signal && version?.source_storage_key && isActiveSourceProcessingStatus(version.source_processing_status)) {
+    return [
+      "La fuente todavía se está procesando. Esta vista se actualiza automáticamente y mostrará la estructura generada cuando termine.",
+    ];
+  }
+
+  if (!signal && version?.source_processing_status === "FAILED") {
+    return [
+      "El procesamiento de la fuente falló. Revisa el error informado y vuelve a cargar o reprocesar el video para generar el contenido.",
+    ];
+  }
+
   const parts = signal
     ? [
         signal.analysis_summary,
@@ -238,6 +268,138 @@ function buildSourceDocumentItems(version: ProcedureVersion | null): SourceDocum
   }
 
   return items;
+}
+
+function getSourceProcessingProgress(status: string) {
+  return SOURCE_PROCESSING_PROGRESS[status] ?? 0;
+}
+
+function formatDateTime(value?: string | null) {
+  if (!value) return null;
+  return new Date(value).toLocaleString("es-AR", {
+    dateStyle: "short",
+    timeStyle: "short",
+  });
+}
+
+function SourceProcessingStatusCard({ version }: { version: ProcedureVersion }) {
+  if (!version.source_storage_key) return null;
+
+  const status = version.source_processing_status;
+  const currentStageIndex = SOURCE_PROCESSING_FLOW.indexOf(status as (typeof SOURCE_PROCESSING_FLOW)[number]);
+  const isReady = status === "READY";
+  const isFailed = status === "FAILED";
+  const isActive = isActiveSourceProcessingStatus(status);
+  const progress = getSourceProcessingProgress(status);
+  const processedAt = formatDateTime(version.source_processed_at);
+
+  return (
+    <section
+      className={`rounded-3xl border p-6 ${
+        isReady
+          ? "border-emerald-200 bg-emerald-50/70"
+          : isFailed
+            ? "border-red-200 bg-red-50/80"
+            : "border-indigo-200 bg-indigo-50/80"
+      }`}
+    >
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <div className="flex flex-wrap items-center gap-2">
+            {isReady ? (
+              <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+            ) : isActive ? (
+              <Loader2 className="h-5 w-5 animate-spin text-indigo-600" />
+            ) : (
+              <AlertCircle className="h-5 w-5 text-red-600" />
+            )}
+            <h2 className="text-lg font-semibold text-gray-900">
+              {isReady ? "Fuente procesada" : isFailed ? "El procesamiento falló" : "Procesando fuente"}
+            </h2>
+          </div>
+          <p className="mt-2 text-sm text-gray-600">
+            {isReady
+              ? "El video ya fue analizado y los artefactos derivados quedaron disponibles."
+              : isFailed
+                ? "No se pudieron generar los artefactos de la fuente. Puedes volver a intentar con el mismo video o subir uno nuevo."
+                : "El pipeline sigue corriendo en background. Esta pantalla refresca el estado automáticamente cada 3 segundos."}
+          </p>
+        </div>
+
+        <div
+          className={`rounded-full px-3 py-1 text-xs font-semibold ${
+            isReady
+              ? "bg-emerald-100 text-emerald-700"
+              : isFailed
+                ? "bg-red-100 text-red-700"
+                : "bg-white text-indigo-700"
+          }`}
+        >
+          {getSourceProcessingLabel(status)}
+        </div>
+      </div>
+
+      <div className="mt-5">
+        <div className="flex items-center justify-between gap-3 text-xs font-medium text-gray-500">
+          <span>Progreso estimado</span>
+          <span>{progress}%</span>
+        </div>
+        <div className="mt-2 h-3 overflow-hidden rounded-full bg-white/80">
+          <div
+            className={`h-full rounded-full transition-all duration-500 ${
+              isReady ? "bg-emerald-500" : isFailed ? "bg-red-500" : "bg-indigo-600"
+            }`}
+            style={{ width: `${progress}%` }}
+          />
+        </div>
+      </div>
+
+      <div className="mt-5 grid gap-3 md:grid-cols-3 xl:grid-cols-6">
+        {SOURCE_PROCESSING_FLOW.map((stage, index) => {
+          const isCompleted = isReady || (!isFailed && currentStageIndex >= index);
+          const isCurrent = !isReady && !isFailed && currentStageIndex === index;
+
+          return (
+            <div
+              key={stage}
+              className={`rounded-2xl border px-3 py-3 ${
+                isCompleted
+                  ? isReady
+                    ? "border-emerald-200 bg-white text-emerald-700"
+                    : "border-indigo-200 bg-white text-indigo-700"
+                  : "border-white/70 bg-white/50 text-gray-400"
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <span
+                  className={`inline-flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-semibold ${
+                    isCompleted
+                      ? isReady
+                        ? "bg-emerald-100 text-emerald-700"
+                        : "bg-indigo-100 text-indigo-700"
+                      : "bg-gray-100 text-gray-500"
+                  }`}
+                >
+                  {index + 1}
+                </span>
+                <p className="text-xs font-semibold uppercase tracking-wide">{getSourceProcessingLabel(stage)}</p>
+              </div>
+              <p className="mt-2 text-xs">
+                {isCurrent ? "Etapa actual" : isCompleted ? "Completado" : "Pendiente"}
+              </p>
+            </div>
+          );
+        })}
+      </div>
+
+      {(processedAt || version.source_processing_error) && (
+        <div className="mt-5 flex flex-wrap gap-x-6 gap-y-2 text-sm">
+          {processedAt && <p className="text-gray-600">Finalizó: {processedAt}</p>}
+          {version.source_processing_error && <p className="text-red-600">{version.source_processing_error}</p>}
+        </div>
+      )}
+    </section>
+  );
 }
 
 export default function ProcedureDetailPage() {
@@ -513,6 +675,8 @@ export default function ProcedureDetailPage() {
           </div>
         </div>
       </section>
+
+      {latestUpdate?.source_storage_key && <SourceProcessingStatusCard version={latestUpdate} />}
 
       <section className="rounded-3xl border border-gray-200 bg-white p-6">
         <div className="flex items-start justify-between gap-4">
